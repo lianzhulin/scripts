@@ -1,0 +1,46 @@
+#!/bin/bash
+
+echo "$@"
+
+myhint()
+{
+    echo sed -i 's/\/lib\/\(ld-linux.so.3\)/\/etc\/\1/' "$@"
+}
+
+myins()
+{
+    to="$1"
+    shift;
+    for f in "$@"
+    do
+        { adb -e push "$f" $to; }
+    done
+}
+
+buildin()
+{
+    for wee in `cat $0|sed -ne 's/()$//p'|egrep -v 'main|buildin'`
+    do
+        prog=$(basename $(readlink -f $0))
+        ln -vs $prog $wee 2>/dev/null && {
+            echo -n;##grep $wee .gitignore 1>/dev/null || echo $wee>>.gitignore
+        }
+    done
+}
+
+main()
+{
+    prog=`basename $0`
+    [ $prog == "weest" ] && {
+        [ -z $1 ] && {
+            cd `dirname $0` && { buildin "$@"; cd - 1>/dev/null; }
+        } || {
+            echo tbd ...
+        }
+        return
+    }
+
+    eval $prog "$@"
+}
+
+main "$@"
