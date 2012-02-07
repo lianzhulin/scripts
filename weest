@@ -19,6 +19,20 @@ myfmt()
 	#sed -i 's/ \{4\}/\t/g;s/ *$//g;s/\r//g' "$@"
 }
 
+mytar()
+{
+	if test -z $1 -o "$1" == "."; then
+		cd $(readlink -e $(pwd)) && (
+			basename `pwd`|xargs -ti tar -C .. -zcvf /home/diskbak/{}-`date +%Y%m%d`.tgz {}
+			cd - 1>/dev/null
+		)
+	else
+		dd=`basename $1`
+		echo ${dd/.git/}
+		tar -zcvf /home/diskbak/${dd/.git/-git}-`date +%Y%m%d`.tgz $1
+	fi
+}
+
 myins()
 {
 	to="$1"
