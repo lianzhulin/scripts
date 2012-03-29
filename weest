@@ -2,6 +2,15 @@
 
 echo "$@"
 
+apk-ins()
+{
+	for f in "$@"
+	do
+		echo Installing $f ...
+		adb install $f
+	done
+}
+
 myhint()
 {
 	echo sed -i 's/\/lib\/\(ld-linux.so.3\)/\/etc\/\1/' "$@"
@@ -9,13 +18,13 @@ myhint()
 
 mksi()
 {
-	find . -name *.o.cmd|xargs cat|sed 's/$(wildcard//;s/)//;s/[ \t]*//g;s/^\///'|sort -u|sed -n '/.[chS]\\/p' |tee si.lst
+	cur=`echo $PWD|sed s#^/##` && find . -name *.o.cmd|xargs cat|sed '/gcc/d'|sed "s#${cur}/##"|sed 's/.*:=\(.*\)/\1\\/;s/$(wildcard//;s/)//;s/[ \t]*//g;s/^\///'|sort -u|sed -n '/.[chS]\\/p'|sed 's/\\//' |tee si.lst
 }
 
 myfmt()
 {
 	which dos2unix && dos2unix "$@"
-	which indent && indent -npro -kr -i4 -ts4 -sob -l120 -ss -ncs -cp1 "$@"
+	which indent && indent -npro -kr -i8 -ts8 -sob -l80 -ss -ncs -cp1 "$@"
 	#sed -i 's/ \{4\}/\t/g;s/ *$//g;s/\r//g' "$@"
 }
 
