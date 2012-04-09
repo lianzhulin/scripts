@@ -1,0 +1,811 @@
+#!/bin/sh
+
+BENCH=$(basename $(pwd)) && echo $BENCH
+BUILD=~/.build
+
+buildin()
+{
+    uri=$1
+    target=`echo $uri|sed -e "s/\(.*\)\/\(.*\)/\2/;s/.tar.gz//;s/.tar.bz2//"` || return
+    echo Generating $target.in ...
+    cat > $target.in << EOF
+DEF_URI=$uri
+EOF
+    echo $target.in>> $BUILD/.dirs
+    return
+}
+
+gen_build_in()
+{
+    [ -e build.in ] || cat > build.in << EOF
+PREFIX=/usr/system
+ARCH=arm-linux
+#ARCH=i486-linux-gnu
+#ARCH=mipsel-linux
+CC=\$ARCH-gcc
+CPPFLAGS="-I\\\$PREFIX/include"
+LDFLAGS="-L\\\$PREFIX/lib"
+##################################################
+DEF_URI=
+DEF_USR=
+DEF_VARS="CC=\$CC CPPFLAGS=\"\$CPPFLAGS\" LDFLAGS=\"\$LDFLAGS\""
+DEF_HOST="--host=\$ARCH --prefix=\\\$PREFIX"
+DEF_INST="install"
+##################################################
+return
+EOF
+
+    [ -f build.in ] && . ./build.in
+#------------------------------------------------------------
+    buildin http://www.zlib.net/zlib-1.2.3.tar.gz
+    cat >> $target.in << EOF
+DEF_HOST="--shared --prefix=\\\$PREFIX"
+DEF_INST="\$DEF_INST LIBS=\"libz.so.1.2.3 libz.a\""
+EOF
+
+    buildin http://www.ohse.de/uwe/releases/lrzsz-0.12.20.tar.gz
+    cat >> $target.in << EOF
+DEF_USR='
+[ -f \$target.patch ] || {
+    xxd -ps -r << PATCH_EOF |gunzip |patch -p2 && touch \$target.patch
+1f8b08002e44f74c00037550514fc230107e2ebfe2e4c16c946eed046190191223c6048dd1f84cc86871baadcb5a129df2dfed8d1031ea3ddcb5dfddf7e5ee638c41fd1ae675631ac6031105110f4d9d2212a444c4f19889889d7110c3c9209e4483801f02281f73dea194c24bf3af44c40547091e81184c86622246bf24663370238361ff1c685b450cb3590708214dc62e54b92a64826969ecca66e9145b3b97761d4a646e247cb807c914784a6f6da274254b0f097de8d65ddfc73eb820c4d87a9b5a401d4c53e4b54426924421eca92c97a56e95fcfea983901f86a5b620df3263f7528768372cf45a42028fcb9bf9c3d5357c02e7a3d168faf7a4cd0a1cc6e2dd3d2d16fe7e895d9bbfaf21c83912778b04c62ef1774c5069ae8ddc6fdbe2083b6f9c3b78d6490f6d90e5dadd4048d883b9bb0e525d64e50654ad0bb8bc0f6fc1bc1b2b0be885e8acd23578d50fc3a1574d81d2ca6f35d2e755b9911082d5b044d217b71f267b47020000
+PATCH_EOF
+}
+'
+EOF
+    buildin http://tftp-1.0.0.tar.gz
+    cat >> $target.in << EOF
+DEF_INST="clean all CC=\$ARCH-gcc"
+EOF
+    buildin http://dname-0.1.tar.gz; echo "DEF_INST=" >>$target.in
+    buildin http://cloud-0.1.tar.gz; echo "DEF_INST=" >>$target.in
+    buildin http://curl.haxx.se/download/curl-7.20.0.tar.bz2; echo "DEF_INST=" >>$target.in
+    cat >> $target.in << EOF
+DEF_HOST="\$DEF_HOST --with-random=/dev/urandom"
+EOF
+    buildin ftp://ftp.cwru.edu/pub/bash/bash-4.0.tar.gz; echo "DEF_INST=" >>$target.in
+    buildin http://sourceforge.net/projects/strace/files/strace/4.5.20/strace-4.5.20.tar.bz2; echo "DEF_INST=" >>$target.in
+
+    ##cat in|gzip|xxd -c 1024 -ps >1
+
+    buildin http://cramfs.sourcearchive.com/downloads/1.1-6build3/cramfs_1.1.orig.tar.gz
+    alt_target=cramfs-1.1
+    mv $target.in $alt_target.in && target=$alt_target
+    cat >>$target.in << EOF
+test -d $target && {
+    uri=\`echo \$DEF_URI|sed -e "s/\(.*\)\/\(.*\)/\1\/cramfs_1.1-6build3.diff.gz/"\`
+    echo Patching with \$uri
+    wget \$uri -O- |zcat|patch -tp0
+}
+EOF
+
+    buildin http://busybox.net/downloads/busybox-1.16.0.tar.bz2
+    xxd -ps -r << EOF |gunzip >>$target.in
+1f8b0800f504ed4b0003943cdb72dbb892eff90aae5375f66562c79e24733275bc5510094a1891040390929dad2d1ec55612d5b125972e99c96eedbf6f37405200d5a4bd797084eec6bdd1373418f1b82a95b8febedf3ffd7e71f1e5b0fbf965f3d7f97ab9bfb8dffcb97ed82cee770df4cde5f9e587f3b7e7fbc5f6fccb7f5fbd8ab0ae56d7fffeea3f837f0bde7c0dceef36ebafab6fc17f057ffb5bf03faf02f8b7bcfbbe09c6cbf572bbd8afd6df827f3efd79ffcf8b86f0fcfcdc50dd2df6c17fb4d5fff10f2ee357af5fbd0ed861bf79848a778b87879fc137dbccf23e785cfc6b1958eadf83fbcd7ab30f96f7ab3dd418d9a1063f96dbdd6ab3fe3db063064cba5907e9621b5c5d0597bffdfef6b7dfdffd165cbdbd04d4ab5066b118571336e355248bca96af7fbe3283689ad4cb3d4e61074003b7b37a0842338e034e70b33698babd88eb6921f360b50b7084bbe5fe88e3378562d0519ab3c225a8d1220b9332e2952ef58f2b18485bafd4bccaa52ad828e1503de244e598b3a254bc1a9571cc95367552962432745bea528d6525b34a172c9c922326e845568db42646a027720eddb231871e3bf5675c8d248ca8078d4ba2b8d67d7891c1109384ab230a26c6125cab1c57869a23d3ba4ca1cb4c7497ec84349cf070da50e20c7936236698c86c5cc9bcd0a7238cf8ccc24fdb4e38cbaa321fd8b35c44b1488879eb524434f4c8aefdc8ea5329b8b7349a27222b6f06d7023602b6ba62799ef082dae751a96f47f206b899871570f2e4faece269bbb9bbd82d1fbe5e2cff5a9e9d8ce956279218ab397b2a0f8f876ef5701fc8273c53bbe31185bd2f84c7c6b9a0f73393695a9298512992a84ac4a81efde012882c123311952c1924d313a67854112d36fc123b9c122a090c8e9c0e5badcc328b9bebb3c5f6f1cdc36a7df8eb4dbb6cb598881336d6d76767766da2e597c3b76f284d8febe3089d513926c76a30550e674ba4e233bd6a73ae9454c4f83359d7877573973fb28285967131cf42af1f3350b1deed419e1b7179bac3f5f9c60e51b7fcecc22d33021fa5c0bf53ef987548604b2243430eaedb5ea8445e54730565906e2fa912c9ac18a4d393ce685f48dd0cfca58d7b4327f6aee1aff38b6a65d7feccd76cc9eacb76b1fd1914873570d5712f72909b73a9a22a1559c2b3eb0f0d228dde571a78a89ae94ae79c47d757dd031d335d54a0fd2839c88bb0ca78014d4f29a9d29245a21019212c6a0428b59b0ac775f9f6ea1dd14b4d3513cff7514d842ea4babdbe7cdf47a1414235542723027d6cce33ec879019356750c22a632977c806254ad36dccb2f016b6106ad1dcd6adc0f4b42ab8822df36556873c03659f4b2d6eaa90dca3464d87799582c8005d3cd05828f35bb00baae9e8dad9885466b290a04951ea838aa686236458
+24d584df5ce9425546fa10ca616e848e35099f9e1e96fbd60863dbbbefab1f608595fbd5c36abf5a3aa2a415ce9ca5099a14c9e794116ab2418f3e5f0d60c79f07900e8e111360ca1a0ca8da91091c5d302ab3cf22773a1ef9c5301792b092005af5c1bdfd8cf2698f3a0004caf441a66a88ac220a0b3011935b621bc76616c7f18c6de9a43d84b7b6131c01eaf8279f7da981656b16c2291d4fc8f1aa3cbdc2b9f721896e0a6aa30008da190a8405863856166016163c2c687c0ce794c6c8241a67656df18b91484441ca1143a9cbec2594d8206c0ccf342e254de32e364d511ab134c6bfd496214926d126e70a6cb442a4942428b3c6703f765266f48143a8d10f2ea965186bc96cb6cb031c67e7288f98e6f5009b73c112b750788599539a8c55ee165319b9453927c5b5413cc7a9e14449e9f63c0537c3298209ea1e64b29f678f43583a3d44246722b4125ac629c196066999c96987f025a208743ab001886396a10132a6060c54c544804d80a67809325564439a01c8c5485772e4f04514139dc756d3395442f93b1e497d057ed98dcb35e2e60ac00e4d49345d82048b599914d5084cd5a9315c2ea747420e9b7d5acd2a5e1f07be20618d64b39e53c66f725849a28681f757527e09ec9c62d2b8b7d587774e832cd12e3f80e8704afa360b8fc50967c450ec2c7ddc44eac27536bddfd6fcecf5cb7b26056a6f0cdee1b19cb9eefbd8dfe88410548936cab3b8cd790f56821f326f7c8253bce261a9b49811c707b01a5616dba7eba2cc83d9a5398d6e4c3b1219ca8432691a0c1cdb863b8f44605e7b82249dc261386dc3807b163c9dc622966e3973e55e4af071dac7c660c13973cbe4a47404aadb6aae44567867c4409ce39ecf1d72d0b3c6cf391d4a83a977d5ab929838c31192babfc97532e09eb969fec9294cd8a5b7f000b87affa10b7a7f79e58312cef3d36eedd1ea432692155da4b6e1abae9189a77ee40678740e36014188e0ae1845314d9002141657a52e5217aea1e14fd1132505f30a82100776f23eaee09455c58d6f644573e5daba05d7949505504f0616b20c1d7e2828ab0e8cba047c59ea78a3d7f1a91433b785d219a7b726a57fcccbac4fc237981eae03c5e5b05dd96183b28c38461f5d08cf7cc83c3ced741e5609536ed074ee2a2f28b0541ccbb766396a8bebf171b30e363618137cdd6c83bba760b1be0f1e7f9cfa53ad2dd8465806da79d8fd123c8241675adb2f1fd66899775b44b37a2e2273aefb1abafffa4b707ff82578203cbc4999b2cc480d8c8b0f34f278ff7e7778fc25d87d5f5c363fe084373fe164c3cfd3f64dbc0384031e0a1b213ef6b1de6d1e9694fb194e66ae6d9870d7e188b8899bb9145199e6d394398c301d45e044bbdb0e52238a6556f810bf96cc41043b14b85b7e110c204ae61ac3c8486c57
+3e16f04b4b3224dde27a856be10fd6a9890838cc37450906a737fec6586b8850a69f9d396d4ef92d1e06bf23b02242bf73b0e081b2d9a868f965b55853fb944e0b9e3afde722c7659063df9b51e093e54c5111ff16f58cb775a43b15d220e375018e6ec4782a3362c9ba24dd36fa09e941cd27226ccf1bbf5fed375b6751d89c50cb00c4f8afebd4b80b17891855fda9cb00f0e7bc1c8fd6d3e2dc353058e1ca7aede266e274c033d1c608dfbdfdf881887289eaef2341ddc0391468a8113b02985b96c1d953c4520152c3817747eba050e1595f8be012c09b4bc894d02b8043298751989e3e0bfa52cae248f85c64bd4201d0b867785f50a1fd4c99b228c8e6e60aa8e1a678b5bec7eb092a2627287589502b79def62053b4c1fb70a920b6c7b6c915118f312874257a50371127ec63db1703645e10db6ad0199f7362890c4e6465df58eac5a350e85cf4a0c64a96946969062289cd3698a1e18370e27d4b493348bd7360eff476075e5b6f45d63b14c5c7fc869226060b30d41d83b14b437872015413817027960ea115377f592218718e0c2e7e96a21edf117b038619416cc0ad6b6f9068930b4adef8b49f4a5950f6ac4f85170170809f23fbcc9534b4cd0916ebd59e3abe22a31c0f14678829d888dab1a94812d8cf54ce783420690d19b00bbbbd7edbc561eb950e0b2a126a713df7caf602b5b9fda66a86527134bd88b544bc7203232c21d30bf06e03962f417a2ad26c31f505796bc9a45cb73926c9e6db6a7d912f76bb3f37dbfb205dac17df968fcb35b909ada69f8026989b4bbac8752ed09b1aa1ab5d79a1cf1a6e6b9d804375ebf2890bc52a470c8ba21ec1d3609eb182800c851a386e5d09069bdfd334608c243401f6b65a4ff286b96121f6a1eeb87f443de3164a1b060333116361976f5bf64c9887f9f8f1a33315bfaf312799b72c5262ba730f0a8c2dbc2075cea80b0d4356df0613cb9ec9a69d13631c34bb3f3acb53a7a4165ecd399bb66e50630922a7e40e5f85936e2b9a08ceeab2f7e802caf401626ac213d752d265672a330c1eb46709532802fed7fe2a8875906f37df3ca78c155e8840bb9348748d751a4a37f707dac103d70cdc84118c342543a23ebe612cccb202db0ee3e6cf56b1fccc12b4f96e8dab672c5e3719006ad0975e691f26e9ad730c4e0205baf9c014d555f5a192659197b4b66d463cd8603bad51c2c2692234dd1698269da1997da87344823bebcfef37c1e3e161bf7a825d7984cda96f8a4e3abdaade61c765c2e9740e27728dd32dd42d58928c4ed7ebd0ceb8c22b37bb3f22a32f583b75a6fa369532d7980c3292c98bc6843b0e064ccad39752572f9c41435bc565329cda6479b06018da8dea057d6eb3cb4224da1a482f2325d6a4e5091b0da877d246032e1e565f2e1ecdc1dc9d75292d1799eb82eb
+b39ae8fc7ef974e69e6afd73b75f3e7aa7ba1d1d0b73317c400c457ff6e62899ba772651ade9bb3a0dc1f52973b023d24f33e03e97df225148f8d1a2388a410b4d3c4027e61b47424f3bc5d62c34d1c40a41843eb1a473258a3ae676ba4a025c6f36e2cfa4ce8dc54ba8caec055452c7a754e4b8593483b574e307e82eb8497ab1e25cb1b4b33ea02e301b4a78ae493a8d355a9a5744b706d7d4305c96aed6abbf82af2b604bcb84bbc3d3d3664b84454db5ab939e14179a4cf432d859eceeefd80404082fc5c08dc5e3d8b7fc062de153ea1a013da3e473386ce25ac7f3b056c3ddda16f18c59d850b1e80ff4f5ab78e210893c741d7928ba978b12d8df3708139d87a247fb957a44ad1de9f323d4b8653d28c5e98b3f07693d5962510d0dedf91b9411d1e80fcec12b3fd2a4533d675473065e955e9e702a15313a34ee4d8a987b753e934999722ac9b8c154d6a33d0da235f851a1e2a1e05e4b683938a6e2540d494c5d5bb5d8c960dd3f06b13783d8ac18440b2d3f7ef84044a95a8a924a6f68b14949c9d2231a73b2e9fd6d6942904a8363041769100f0637c1ea2d5a86b12612e1fc312ae6b3594985f90d1876724a5aba88abb30c29aeb20460f977f371493a23f5fb7ac9a8e5b0a850f4e36cd6751f52db6847e33189990415eca503293f5b47791206b535d8c47eb2bf2ac2b9b75ad69beb9615cf314a7284f2c20f352307c94cc604275a14065b5d72518493cee8cb9e4db5f0ca7a3cbdf76c9bc37a7f7130ff117acd6e99a4b383534ca6ad4d90135f205dedee960f0f8bf57273d8514e59ad3e3cfd3c1ad91f94a946dece23140d804fd7efdebe3d094619accd68a9527dfd6b4b80cee569630805ef3bb677e1847d0d6874b426221eca54367422cd131162d48a0863180ad85f138fa7af012c09c790b30e19994b63486698eb38323620151036346152d3b83ebf5752920af61b70d58b30c1341c624a2616d4b58d17f063b1bdd83d6d360f1777dbcdfaccedd73b9c11a162a3b0b9ca72dccf59ac69c3dfa2d00941ad3c44128fab8cf6c06a825ae40da7dd2229e90ccdc0173c4e86ff4166a21a30c80aed5e898d34080de30c1cbb4340d8e32f220e9f56f5bc0633e8327b86002c68cdfb32bfebbc22279a210b11df5231e2c4668b9e462a4c002ea57bf0883aae53e2ddedb69498cb9db21b0cce680ce77d74427a1ed148b170caa92366d03daaa36e5f91396a88ebb3150d722e32ea3ed1e022dc49eac6d026bec37cb232757a9d4439a3aec62c1cdd834a443c2bc8dce39a681209095cc6324cd027548d4b56663035a1c1ea7c0171a4c48c77f31628c24209cc64e22f681366844e72e42624a7a06be148916ff51a1c2c208b87cc8f86ae7183dbb61db9990a9049a19b1a6e54602ebd5c0b377b17ed2bcc8a51a5d38c4970f1733501
+9f8053e6084ae524c8c28cb56ba76958b06ceccdb760e0ddf3e19bb49ac69e21ea82c3bb9bc59274939641b9f99787604afa6ed3dc8b9fcef1963f92ede548b6dcffb9d9feabef46b9096ce5b30fd4466292b07d223af4ecd2be748436dee16d409df9d1b6d53c86013858c1e8c0daa72ae42d837be70205ef05d3488505a1d40cb82fba639198cee268b44c3bdbca8b090cdeb71cd1ea3627d89509454e5dbe17b909e35097b450a16261c8f3028621a73cab3078ebb538e67e392fa9f095a103544f1000538e7d969814e4600d184e4736a66c178b35d9156040d00f692d0d460c285fd762474c8b10b3d208716b29108769617df8704ca4a3d4a89acb052675dbb77b185b5539f5f2a919acb93f2decdb6fbc392333d12db54d15ac4a95e079efa542fead7236b08ee09edc38fc2862fbe394bcc1d46f028608124168b7160dc68d4d5f12124f6125d4a701eac97c0009eccaa210357f9eb8431231cf74c2dc3c701103c9d84d728fcb3cb20f433a10f861154efdd8192dd0ed617db1fabadb2ff6a7cf9d8ff5c869b748f328b910e45314a7ef666e9678409e394dcfde0df66c84661f3a6579def30ea4a5c107480a5f8d441d53b2b5ea78411c34036e23cdf58c7a9e62d0b49100db43bdb8693a81a8a76976fbff210777488d293fc992db67edcd72508c903b4ae71447e7c80342819aa5069957459965543c042b959454040468186593c2498308ab32a32a6501b60c795923729c873b597fec22ef0c19845f67a440e20d50e4a0b909ffcdc2fb74668ded79cf008a8632172ddcbea88bdcab0137f73d0b2b93fcac3c904933712060779179f73502847f446c4283cd952364415a4939f5c3db603a0e5f5065566de038a907e19e4d82254208d40f8f7d52b4f61d53d3df4c10ab45c1bc647c9e64940d6fe168185239783516cddfce3dbfc51047be46a002ca2206db4e3f65aca9ecb19c333a5b076c15a747da6642703526a78618d2063298f6051a393e53b7ce3c062344917b6ca84e3ef3d020c12fe5cdbe1cabb4d00f034ae34835149775a8b42c55c82d1b0c3b10c73a26572c4c294d51a20671ef4da1a8b817e9c45b2870c8c8971cb6ba35652b4b5471a6dc4c594b51e3ec05b151e1e63a79b5bbbb38dc7fbf7bba3f7f582e76cecdb269999041167e62e47be82af72264166676effa24b260912a0e7ffdf5e36f9d3ae1312fdec684cf2e0ebbedc5eefb62bbb4c3bebbb85f7e5d1c1ef6e7bbbbedea69df193e1ecf105f5429d05be3f16d2d1ef4f5dfdbf865abd3eb1a611ab5d2f3ec8d0ade1c636cb3ae2d38274f03426bab7044bdb73678b4a531d410f6243e1a225a947f0e5d7d5a84b99e390c04ba8574b72cbc2ac7ee1ad7558dc7996f5774ea5de2f267e25aec49fea9a99d2e56e4f708305490926605428d1581118fb3c3eecd
+6277b75ab58b9dcb1c83a1e4e3b6230e73ce04eca8c3efe0d5823a27bb6c51276f839dd86bbd189bbbe58e0cb6e31db9d3b49ff186f99c7e891100c783ca525eb80de47e926e2e2249686d03ae349c40caaeb15899ba69abb93f322af333d78d8a3efd28923e79034fd18021249059c1300ef1e62c1bce84811a65566a7c0c63f30929f34a71ff29266673de6a8fc5ed1757bafc8e1f50c84bfb492dcc890fe1b8915fd76a28c7891cc1506a52ead91c10ead410d3c888872225df37345541d185a4c90b0436ca4d7c6649ceab628271306a7dcadcb7dae7f57311c3c6ead093d3accaccbd0f35457bd44efa6f70986b497df6cc6946cf9c874c6a06fbe65e5a2cb73f5677477751cfa041efb304b9f64e24062bc66ebc02fc7f02e449082de3221196f3db998493f0990fcf188adee73a2d39c8649e810809e99360c2ad2329e97c1d93da90cb44f8e1c4639a0b6e1cbad87d830503a9908af7a2f17314c3d3b424cfcfb3fe4e1acf30bc4b1bdd7a7829f01d9b782e09b121aad3edec88fa9a1b5859cdadb63db938d5df970fd4d3493dc127e8dd8b210f392935fdd5159f2c93e49720989b8086774223fcd3553a08fb438eccc30925131fd1796981a071f7a19369998c22b898ee7b7417e7bf3736834c237ba7724c0d0428ea467a9ec7b7526865f9316f442b704e64ea7ca8d0c1d5ef8573e5de024cbcec3d2cd1ab6730982ad10199b8220b0befb30706036bdd8180fd35ed568f3b00bcb2d71d58c874b7f118edab4e80d756f7beda6260306f0c3b78912f83f0178b1623cc67cc467ab88b6636ecf8f98c5e84ff5d8d2363fb0f4828d63ffa9ccf1d924c025f4c8911e3c396093ba6b0d7d9a9c9c67ee68f505a36699ef04c9534f14940d2e1ef3a8e4c67dcdb46c1cb228354616faafe11577f1ed432ff65fbc1b8047d5aeafb2335a2c23738218fcc85b3e74c4dfd6942696c6c44fc44ecabff85e5da2ef787ed1a7ebc7e0dd64121832ff8e9c8d7dd7faf5e7b9f940c82376fdefcdfeca2b562a1274d828ec273caaf50482c564854008de566262b2465e6814ec5d3c8cb570077b3521480fdc4624d60fca00290491aa0c31b35159c8bf2812d65e7fcdc82cc9cd4228582a2d4b4cc0a2e656c471e225ce0023ec0b6b4385501d4a5e3c2703a9a47b894b11eb70b3914373735af14226cad508b1428d083ffb0044b6a0568f1a90278405b05445ae927272667a4722927a728c098d01380814e861aa4a05baca047c8a940e3d5b9c0c704834e87b1e50200f623618f6d580000
+EOF
+    cat >>$target.in << EOF
+DEF_USR=\$DEF_USR'
+touch .config
+sed --in-place 's/arm-linux/$ARCH/' .config
+'
+EOF
+
+    buildin http://matt.ucc.asn.au/dropbear/dropbear-0.52.tar.bz2; echo "DEF_INST=" >>$target.in
+    cat >>$target.in << EOF
+DEF_HOST="\$DEF_HOST --with-zlib=\\\$PREFIX"
+EOF
+
+    xxd -ps -r << EOF |gunzip >>$target.in
+1f8b0800b3e0b64b00037d904f4b033110c5eff9148fe6a287ecd242b52a1441046f052d78b36437d96e68b7b34cb2d4f5cf7737ed76b58a740ec930c9fce6cd930fb3e7f90cba0984352ddd269eb95ea360aaba54fe0a21b98262a44c14d2c4fb123788256716ecb588ef59e3db8c5e51ad8c63a80a97e331547dd421a461aa33ab79655ba880d809551c18f8e8094bb635062fb143c5fa00d3e911248d924b62f766cd2262bc90795991d94f3bf5eb6738d4fd6e935eb9c9f2b5b39b00e57a25fbfd4bf24108d9f9d459c4b6a260e5c910df3ca68cc2edf06a940c2f26c930194ffee0f4264a72a6f3bc63e3ecc9e60ddbbbc73988513721b4e7ff4de9bdaab5f75b83dde2e27d27f9539b0c05f156b341c8ebebd1e870892f3c21cec4f4010000
+EOF
+
+    buildin http://kernel.org/pub/software/scm/git/git-1.7.3.1.tar.gz
+    cat >>$target.in << EOF
+DEF_HOST="--help"
+DEF_INST=" \\
+CC=\$CC \\
+NO_OPENSSL=yes \\
+NO_CURL=yes NO_EXPAT=yes \\
+NO_SVN_TESTS=yes NO_TCLTK=yes \\
+NO_PERL=yes NO_PYTHON=yes \\
+ZLIB_PATH=\\\$PREFIX V=1 2>&1|tee build-log+"
+EOF
+
+    buildin http://pkgconfig.freedesktop.org/releases/pkg-config-0.23.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS=
+DEF_HOST="--prefix=\$PREFIX" #--with-installed-glib
+EOF
+
+    #buildin http://valgrind.org/downloads/valgrind-3.5.0.tar.bz2
+    buildin http://ftp.twaren.net/Unix/NonGNU/freetype/freetype-2.3.12.tar.gz
+
+    buildin ftp://ftp.simplesystems.org/pub/libpng/png/src/libpng-1.2.43.tar.gz
+
+    #buildin http://www.ijg.org/files/jpegsrc.v8a.tar.gz
+    #buildin http://www.ijg.org/files/jpeg-8a.tar.gz
+    buildin http://www.ijg.org/files/jpegsrc.v8c.tar.gz
+    cat >>$target.in << EOF
+target=jpeg-8c
+EOF
+
+    buildin ftp://ftp.remotesensing.org/pub/libtiff/tiff-3.9.2.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS CXX=\$ARCH-g++"
+EOF
+
+    buildin http://www.libsdl.org/release/SDL-1.2.14.tar.gz
+    cat >>$target.in << EOF
+DEF_HOST=" \$DEF_HOST \\
+--disable-arts \\
+--disable-cdrom \\
+--disable-joystick \\
+--disable-video-x11 \\
+--disable-video-dummy \\
+--disable-video-opengl \\
+--disable-video-directfb \\
+--disable-esd --disable-alsa \\
+"
+DEF_INST=" \$DEF_INST \\
+; cd test && \\
+{ \$DEF_VARS ./configure \$DEF_HOST --with-sdl-prefix=\\\$PREFIX --without-x && make -k; cd - 2>/dev/null; } \\
+; echo "
+return
+EOF
+
+    buildin http://www.libsdl.org/projects/SDL_image/release/SDL_image-1.2.10.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS \\
+PATH=\"\\\$PREFIX/bin:\\\$PATH\" \\
+LIBPNG_CFLAGS=-I\\\$PREFIX/include LIBPNG_LIBS=-L\\\$PREFIX/lib"
+
+DEF_HOST="\$DEF_HOST --with-sdl-prefix=\\\$PREFIX"
+return
+EOF
+
+    buildin http://www.directfb.org/downloads/Core/DirectFB-1.2/DirectFB-1.2.10.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+DEF_HOST="\$DEF_HOST \\
+--with-gfxdrivers=none \\
+--with-inputdrivers=linuxinput \\
+--disable-x11 \\
+"
+EOF
+
+    buildin http://www.directfb.org/downloads/Old/DirectFB-examples-1.0.0.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS=\${DEF_VARS/\"\$CPPFLAGS\"/\"\$CPPFLAGS -DD_HEAVYDEBUG=D_DEBUG\"}
+DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+DEF_INST="-k"
+EOF
+
+
+######graphics
+    #buildin http://ftp.gnu.org/pub/gnu/gettext/gettext-0.18.tar.gz
+
+    buildin http://ftp.gnome.org/pub/GNOME/sources/glib/2.24/glib-2.24.0.tar.gz
+    cat >>$target.in << EOF
+DEF_USR='
+echo ac_cv_type_long_long=yes>>$ARCH.cache
+echo glib_cv_long_long_format=ll>>$ARCH.cache
+echo glib_cv_stack_grows=no>>$ARCH.cache
+echo glib_cv_uscore=no>>$ARCH.cache
+echo ac_cv_func_posix_getpwuid_r=yes>>$ARCH.cache
+echo ac_cv_func_posix_getgrgid_r=yes>>$ARCH.cache
+'
+
+DEF_VARS="\$DEF_VARS NM=\$ARCH-nm"
+DEF_HOST="\$DEF_HOST --cache-file=\$ARCH.cache"
+DEF_INST="install"
+EOF
+
+    buildin http://downloads.sourceforge.net/expat/expat-2.0.1.tar.gz
+    buildin http://ftp.gnome.org/pub/GNOME/sources/libxml2/2.6/libxml2-2.6.30.tar.gz
+    buildin http://ftp.gnome.org/pub/GNOME/sources/libxslt/1.1/libxslt-1.1.22.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+DEF_HOST="\$DEF_HOST --without-crypto" ##--with-libxml-prefix=\\\$PREFIX"
+EOF
+
+    buildin http://fontconfig.org/release/fontconfig-2.8.0.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+DEF_HOST="\$DEF_HOST --with-arch=\$ARCH"
+EOF
+
+    buildin http://ftp.gnome.org/pub/GNOME/sources/atk/1.30/atk-1.30.0.tar.gz
+
+    buildin http://www.cairographics.org/releases/pixman-0.22.0.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+EOF
+
+    buildin http://www.cairographics.org/releases/cairo-1.10.2.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+DEF_HOST="\$DEF_HOST --enable-directfb --disable-xlib"
+EOF
+
+    buildin http://ftp.gnome.org/pub/GNOME/sources/pango/1.28/pango-1.28.0.tar.gz
+    cat >>$target.in << EOF
+DEF_VARS="\$DEF_VARS CXX=\$ARCH-g++ PATH=\"\\\$PREFIX/bin:\\\$PATH\" "
+DEF_HOST="\$DEF_HOST --without-x"
+EOF
+
+    buildin http://ftp.gnome.org/pub/GNOME/sources/gtk+/2.20/gtk+-2.20.0.tar.gz
+    cat >>$target.in << EOF
+DEF_USR='
+cur=\`pwd\`
+target=\`basename \$cur\`
+[ -f \$target.patch ] || {
+    xxd -ps -r << PATCH_EOF |gunzip |patch -p1 && touch \$target.patch
+1f8b080044d6be4b0003b555416fda30183dd7bfe25376493001076807e961dd5a5a21d44bc7a4ed6419ec508b10a3c4414353fffb6ca0d2286e921e6629b1ecbcf7e2e77c7ee13249202c37b0d42b1cf63a3dd221dd255fd98ba592155c249d45f55314866135e2a24722129241484610f5e3e82aee0f3ae4b50126434210c6f8032a9771348a07fd33959b1b08a3e160d8be02bcefa31e9839f15b8b3c034af56e235402be51a62bb15bb30d4d955a951b3b0a00c1a732336f837f9eeb9c6545cab4b01373c5724e0b6d86065c25fb1e2d68a44d29d33a97f3520bdfdfef81ef4dbe52da80eb056dd8ca42ce652af5cef78c1d56a6da0b82e01a01c2e70e19e7742b735db294ae15978914798170953b2725a8156de2cb49ac34855da6ecf541534e4a502bdac494935863ea4d2d6e0d35c9d59a666c5d557c27b8c0cdae59f109b8a69e107f2f43b8ccc54227733b30a245f83ae148940aac335f2af06fd3e6b3099c4669d354d364cf30ee5dbab367343a648feda391cd1e67d480ffc057d3fd2c1c1b828b5ce8d27c5262f6f5c51ed5ad921ce1da4375a6d53ac0db08436d33dcc7a3d2cc1412b40e2985f01f845fecd15ace954a05cb4e16e23e08ff6d2100dd16dc4f7e3e8e639814a09fa5bd09c8e5f259db61b604ad80ab2fd0ea5af87127674f3fc6d7d6874d7653b832b3b5ff7037a5d3f1afeff46ef234be9ddd7fa3b7941a80cc1669c9057827ff1d0ffd05b23a896d26070000
+PATCH_EOF
+}
+
+echo ac_cv_path_GTK_UPDATE_ICON_CACHE=/usr/bin/gtk-update-icon-cache>$ARCH.cache
+echo ac_cv_path_GDK_PIXBUF_CSOURCE=/usr/bin/gdk-pixbuf-csource>>$ARCH.cache
+'
+
+DEF_VARS="\$DEF_VARS LDFLAGS=\"\$LDFLAGS -Wl,-rpath,\\\$PREFIX/lib\" PATH=\"\\\$PREFIX/bin:\\\$PATH\" gio_can_sniff=no "
+DEF_HOST="\$DEF_HOST --cache-file=\$ARCH.cache --with-gdktarget=directfb --without-x --without-libjasper"
+DEF_INST="\$DEF_INST -k"
+EOF
+
+    buildin http://download.icu-project.org/files/icu4c/3.8.1/icu4c-3_8_1.tar.gz
+    cat >>$target.in << EOF
+[ ! -h $target ] && ln -sf icu/source $target
+DEF_USR='
+cur=\`pwd\`
+target=\`basename \$cur\`
+source=`basename icu/source`
+cd ../icu && {
+    [ ! -d \$source-host ] && \
+    cp -av \$source \$source-host && cd \$source-host && { ./configure && make; cd -; }
+
+}
+cd \$source && { ln -sf ../\$source-host/bin bin-host ; ln -sf ../\$source-host/lib lib-host; }
+
+[ -f \$target.patch ] || {
+    xxd -ps -r << PATCH_EOF |gunzip |patch -p1 && touch \$target.patch
+1f8b08005f8ebe4b0003ed1c6b73e246f2f3f22ba6769dc404c4c38fb54de29441c85ec5205c207c9b54ea2859085b65211149d8bb5b95fbedd7d3a3379210d826b9aaa3124b9a47bfbba747a3dea93e9b11ce5e2e88ae2eeb8eb5b455ad3e555ca50ecf8bc7fb9a6eaaf07f7e6f89e33892d9fbeea0d138e19a07f01f691eb68e4f5b8da35ac3ff11ae71dc68942a954a3e8453ae71c0350e49f3a07578dc6a9cad40b8b820dcd159f59454f02f3c8e27e268d211af2682d415dbd2f945a2e1a2444ae403fd91f6744adc078dcc2cc3b09e75f39eb8964f8f6a9933fdbede571eb5996e68945f52e2ae0489e7075de17c6fbf2302b861b97eaf99aa6a4d35d6d997125d739093c88f6faeaf221d8ccf5265151cf760396e08b3928419f603e04a1230ebf5a0039ba569a6a2238ce5f5ad2839d2b7958a13f3e30a3e4a57f0e1c7ea09a9e05f78644c77db727b3218cbc03639277bfbecb65c229a094c53e6f9f1105a5a201db81b4e2ec7bdde048770de749ce7ab042446e9839600f88d3c2a13ee4fc2a984730882c1a1d6d2addf2d75635adfdb076270f04daf2d5f0e86fd89d4ee0b306b4ab02f4e28b4f77ff09b7addcb5efb6a74fe7e6fdfbba5b0e4f2fb1f4a951402996aff49548288f599f627d907e18f0ecf1a93913ceed049e56a13f4806dd43a178afaa8dc6bf084ca6c1e1e526db20b5327626a0ff94fe2ad803ccf74db719f2d9bd2f70c2ca88a3da5d84c862e31a55c05747edb68301ef2420c9ac756a61c6a20d212097be320ca2db28a316270dc3be8966e07d7d81af770c2b9e15cfe537b584e879581b95449831d75f29722f0bd45331c2d2260416a777a0228b42d8b7cb9fa9b302a334784204b3d112fd0109a614f1cc928a9d190a7f75de16614224ed19d470984660990dc0a13b93dbc12640f197977a1a90f16793f36a9f9d0d09cc90451cc298188a8d98a8b032fc8bea13b2eb166049d85861ba7fc9e02e5f6f687fd5b20ec628ddea8e575c662afcb1c824380dc17f2c78f3984fc42e116d0d9f6c03d45f9d2d9bb78efb7a31e51472727d5a38fa0247685264fc71f08c02597624f18e11248960bdb5a3835a0aac44508aa87ed54a16349a44b14a5097bc7a64e97a62e48b6e67e71534674f4a9ded76ddbb2411dde98c89288d0c1c63e0bc267b91c1585e7a17279612a73cda32c554d3e1816f21204104e8f0b3821ef653865722b0c47e240ca72e3100fa7b255ac3846081072ff2607656547420f7286cd249f63c8af2ffe42c8de4007cc11ee4078297ee03717d348c466e8c440ced9a64587edc082199a3737e0ada415a8382eb27c73785db915c1f56696a72a8e9662797ef3c696472716b03c3a6c0796c7d0bcb9e56d25ad7027151359be35bcaedc8ae07a2bcb8b2eb1516186ed69d2bc8140acd9eed7b6a10375
+4ec65ae48fba558ca5963fb46358eaa3dfc90ffaa2c4339d3aaaad2fdcda43a2597d506c6c8caed094e402468fe3129a895bd2ff18f3e1fa1897c09ac5344d0c2c1a99963d4f89467ef376994957b3f5276d2a0110c5d0bf41926e993798ec6c953e52628ae630a9dd61a695de1d86e42c43a224ec207a32346f1e3dff31da0d2c74772acef794d7d573115c6f9867d0ad30f24c1f1d6d4adf754eb5056c0e8965a68bc9b78c354204808ea6915f75d7d5ecbbe53d393a3a3b5949687cfca9c074f309866459e1a5ada8d4ae1463ccb7572302cc2c10fd6154865413ca8b0b7925d5781b3e023b8831936f32db72e4c5faf4f57f99bb04e6e69e38b38026701ce19a493ad7a32b14ceb6a23ff4c338136b9cf6953941cda8e69342d38655dd447b903bbe3f1ab2dc40b5cc27dbb59d941d019d54644b40c7a530928e232ef48d090b93dc38756b32e2cd486476ae4f4da5e62c160933f79b29b97d71c4fb102450e98dad2d600dc3638a15793a0be84d5f9d96e9ab5291b75908758de3a2af476825dc1d638f70665a145892c3da41ad41b84792c255c26db69247a0991709255fe97f8364fc03c20d7f047e9de135b53ab8786f5af180f2e0a87a70462ade155f9c17133dc0721f14489954b776673f7a2fd883a812ed83a1ef82b7dbe4fbef896132b9445c859e7d5237185e773ce4dff960a1cdc7fb5dca0b2dfb31aa5d206082ece5bd75b21ff14c2aa1299becfd4c380bdf946f4a49f85226939c352f73d6d2f402d5f37297aa1e2ec14bf6a4ac5577ba5ed630685359c39434be2847c0da8aa0d7921146dc4c5ad644ea7c825e2265e916a52cdd7a528e8575e0cd7c4aac40dfd596ea3c22afb9f2a8d17562dd9ae88f434672d69cbdfd9f2f134948013298a85669c991eb6604bd40c6436abc1fe825725c045daa6518b8c123b6e650c1f3835e6855d0d6c21716bdb855c54dd5bedbd4b8ed3b78be12a461c73beb4e89fd21522699903012a8674362035bcea438df055e856c92903245d8153e7be7d61e13e116b08e837b6d19b2c9893c1484e48c95601361ee651ac8232285b9045109fdbc2a9b698a7c05ddbd90615222d169ac9b1ad6ca297a78dc9b71c8ad9b8eab18066ce94307352c55c153ef9fc81f2c07f9d8ac369b9083b02be62045d133ec7fbd27bfd0c3e69ffc704057532f10c496174f5ff9ab5cdcab60ace755af18144202bc701910190685cd08cf880959d4bfdcc8d6b290cc31d67b4e6728b4afffcee010212085a994c0f016eced22286cc62806046a49b0ecbe5238b8b335e53125149c3658286057b61d29843823100c3bd2a51f09e8fd8a47d1c6dd270511ac4cfe11dac208b031c1bb480c0a904e92d25eef1b74f4dfe9f921fe34a6523cff2dd8db85e76fc6287a3e4e791db747775cf5fab3b36af3887e278d57f4fa
+0248335c5e1eb6a5514f947db7f79f573cc9efd8bdfb2730334d24e80cc3c0d60cec221c6cc00a6cdf98864c3c9103fb404328a3a20818080761be45e9a7e1dea3902477d11eefbd015f38857b2db585385737b9291bedb594ee423feb68c637d1fa0c8b0ddc6ff420804c755b535dcbfe0a49bbe92ae0bd4421a6f60cfdf484e9c79aabd8b5fb6ff8f16a951ed811dd2533cb26df2c53d3cd99c54287fc7bf0a178da47d370eb5a8b097e070e18cb75d7b20ca7ce68a8c7519557e739b6ba7616fb32f8b8795a3d2315768186df0792204a978373b0d3dff190037513279e4a65f0a4d9b60e02a1b2f16c96493dc92c3db0548c67e5ab43164bc32033db9aa35cc3ea85189d315c31fb0e7a3ce3f1895db1d6c802b1e1fcd455c60fe192e56ac997bd314e75878857d2602874c99da62a54fb548ef8713ded5c0062cd746b1b78da9f6bceac235c6cea109b80469df39097ba5ad41ba8e2f03bee981814073c429b6ad35a290aa4150a83d9de61931600b10bae6ba943c3ca900f011af200381c6b0edee5384bcda911f11e8c50636dcf8a6dc232eb9067dd7d003e33a264548df961f245fa5a39e3281e1d73287c8d74684b5af1249a69f0f800358817d4606e52a21a9a6272c09b6e4eb52f2df0abe0bbfef899fc4a0e182b5760cb1e1be42f86acda2344fe0669715214116c547d45e979833c368f32749b11c47c4c3cd121447e7cc493c3da51155d59a57ee39d739305fb0a4ed71c567e41f6c36f72aae167afd5f0dbeb6af8f95999e25200da032c4514dc14b25b0fc77c6e99a4dbeb61b480265b9b51bca60551d3548d656430167f78d54730fc2b99c3c85a7a4d9cf6c5b595fa92be5ecf2a8dcb1812ad90cb18922c943b691d34f20ae572c044ebe53eb68e4ed30b221bb44a07ffc263bbd79bf4db12cb76305360a53658afe57907789850227c4f684bfeb01fff43b324af8c2706c33b5b20b262df6b54ec33ba6cd3d78e258e818e55d6a5e08b18ecea0466aeb9b36875dfcd0d96a391ca39e1c4649ae3d989dfe1e73119cd7af39435fa0db51aa6124b57374aa4277698d8e0064c5e6c9e4ae5e069cc6332295cb6c73d7942877a7d933e5b9c9a0d2c5e64176860b10b93f216cdc9f119225810c0069d5f055e46305e491465d71fd982b873f1814b0b3d7e6d20c7e148c22d5892cf7c7b40bc7e5a5d4bb8390b867dc8ccfc3daa3f528e3c0477f5e0ae6638b037cf20225ea5b80b4a02c945810643a8e8a6b0418e493df2e055249eb28ac453a6a2204f28f9d183ae3518c65a597444d12796067fcd612d5ec1668adaa890faa32b569ab952e01917931315d316da2b4e5f42a3bb2392bd1549eb6a113f2892d0657d0dd5e68f34cf062aaf45692443e08269a3081aa6f2e326aa1c2fec5548214c9142c6313f906e411413e4b6eab81001
+553038ef3d4cd264fcc8f92e85b2ae30c25ad2b0f80f094dcf3062aad8c2a9445cd811bf3cd8ca60b22d6347e4f8e5aa494947cb209b1f99863f061a0e1406d1b98cb117673143f36d3acc997dc342d4588b390af3e7743d5e74f3d3420ef223f9923b65aef1efae270b98461f2f0ba46f6b2190502c73582d5296ee7c038449c8355c694ec0cbf85de2da9429a2ed9cac293e2a2b718a8f7a49eeb40a299a3e9db49a87a9e9d3f131db8cb0bdc8c2505c9ae09c5ff877ffff1724e076aacd68ac4d683bd6115570ac23e51f8ef898a7d395c971351e9da4aaf1e000332f76810696b0c983416f2c8b3dc81a7b98a8b1306480b563b5fbe4a6e48d1407e784fdb2460e854bf1f3e45f9f0469321e095d16bf592bbd1f60eeeaa5aed043b3c3f125eb1c0dbc8277ffe3df89d7c5365aa2f9643d6a55e2407e6de877b6627f855c04f65cf4a5183837dd7b791db0c5aa818160d460696a17100ddbc3df6edaf2a78920dddeb687e573e480b64eb039a0d2e3ab95cca01d7779479d67a583bd63535dcd7167cfadbdbd0c8494107afcc97f12f86b81165abd944434cdb7a713e57fe3b93ae72c34559fe92ad5c47251f2f79824080613fa55d664662bf773cd742f4aff051bd8c5485b470000
+PATCH_EOF
+    xxd -ps -r << PATCH_EOF |gunzip |patch -p1 && touch \$target.patch
+1f8b0800cdadbe4b00038d8ec14ac4301086ef798a012f6a9c76d2ae6c8d97053d16d6837709edb41b4893924d58f7e0bbbb5604d14bffcb07ffcc7c4c6f8701f09467b05d2e8f21c78e4b67ce21277e2f5f4c346334f3a15d9aa29b57ef09448435be8a688baa42550355fabed1b429e82720a9211252ca952e45481ba407509556b556ea9f6bb7036c547db705f98d4be1f8cdfa5457f047aaf5c8a9357ecc66e4a7d00b015f899c72f4e0b373bf86fc28e043e0153b3b08b900e8725196f0ba7fde03429fa7e90c769a1d4fec9349367818428468c743021f4e455188d5dff07517fc31411b3ae3186eddc21bf109d41529e9d4010000
+PATCH_EOF
+}
+'
+
+EOF
+
+    buildin http://www.sqlite.org/sqlite-3.6.23.1.tar.gz
+
+######multimedia
+    buildin ftp://ftp.mars.org:21/pub/mpeg/libid3tag-0.15.1b.tar.gz
+    buildin ftp://ftp.mars.org:21/pub/mpeg/libmad-0.15.1b.tar.gz
+    xxd -ps -r << EOF |gunzip >>$target.in
+1f8b08002df2bb4b00038590d14bc33010c69fbdbfe2c8c686c6abeb834865853eb8bd16149fa6489aa65d604d469a8a68fddf8d1bc5391ce629f77dbfef8ebbbbc5f2e5f1e13e9d8217ae563edde8a21125cda2f83a8a0b58215538de7bd15678b9c667ec7bfc000c6f2f10bd2a57d856e17c8e8b7c8993097adb05e757108808c595b4a6d275e71470ceb138a8b30c294e66497279837cf864d96e124a11fab3a7b1dd7adde877c5501bc033ca7b4639b28bf3507c73839f0699011d693ff9b057659d54d4a88601df71a3ffc1e3217f70a22cdd00dee2e8ed14adcd461b455567a4d7d6b407193a9569bd53a6f66b72aaeca46210ce0d9f30852f37ac9f03c8010000
+EOF
+
+    buildin ftp://ftp.mars.org:21/pub/mpeg/madplay-0.15.2b.tar.gz
+
+#    buildin ftp://ftp.alsa-project.org/pub/driver/alsa-driver-1.0.23.tar.bz2
+#    buildin ftp://ftp.alsa-project.org/pub/lib/alsa-lib-1.0.23.tar.bz2
+#    buildin ftp://ftp.alsa-project.org/pub/utils/alsa-utils-1.0.23.tar.bz2
+#    buildin ftp://ftp.alsa-project.org/pub/oss-lib/alsa-oss-1.0.17.tar.bz2
+
+    buildin http://www.mplayerhq.hu/MPlayer/releases/MPlayer-1.0rc2.tar.bz2 #@2007-Oct-08
+    cat >>$target.in << EOF
+DEF_VARS=
+DEF_HOST='--disable-mencoder \\
+    --disable-tv --disable-ivtv \\
+    --disable-x11 \\
+    '
+DEF_INST=
+EOF
+
+    buildin http://dbus.freedesktop.org/releases/dbus/dbus-1.4.0.tar.gz
+    cat >>$target.in << EOF
+DEF_HOST="\$DEF_HOST --without-x --enable-abstract-sockets --enable-tests --enable-verbose-mode"
+DEF_INST="STRIPPROG=mipsel-linux-strip install-strip"
+EOF
+
+##    buildin http://dbus.freedesktop.org/releases/dbus-glib/dbus-glib-0.86.tar.gz
+##    cat >>$target.in << EOF
+##DEF_VARS="\$DEF_VARS PATH=\"\\\$PREFIX/bin:\\\$PATH\""
+##DEF_USR='
+##echo ac_cv_func_posix_getpwnam_r=yes>>$ARCH.cache
+##echo ac_cv_have_abstract_sockets=yes>>$ARCH.cache
+##'
+##
+##DEF_HOST="\$DEF_HOST --cache-file=\$ARCH.cache"
+##EOF
+
+    buildin http://www.openssl.org/source/openssl-1.0.0e.tar.gz
+    cat >>$target.in << EOF
+DEF_INST="INSTALLTOP=\\\$PREFIX OPENSSLDIR=\\\$PREFIX all install_sw"
+EOF
+##./Configure mingw shared
+
+    buildin http://www.openssl.org/source/openssl-0.9.8g.tar.gz
+    cat >>$target.in << EOF
+DEF_USR='
+[ ! -e .patch -a -d ../wpa_supplicant-0.6.8/patches ] && {
+    cat ../wpa_supplicant-0.6.8/patches/openssl-0.9.8g-tls-extensions.patch |patch -p1
+    touch .patch
+}
+'
+DEF_VARS='./config --prefix=$PREFIX os/compiler:$CC &&'
+EOF
+    buildin http://hostap.epitest.fi/releases/wpa_supplicant-0.6.8.tar.gz
+    cat >>$target.in << EOF
+DEF_USR='
+cd wpa_supplicant || exit
+[ ! -e .config ] && cp defconfig .config && (
+    echo "PREFIX=$PREFIX" >> .config
+    echo "CC=$CC" >> .config
+    echo "CPPFLAGS=\"-I\\\$(PREFIX)/include\"" >> .config
+    echo "LDFLAGS=\"-L\\\$(PREFIX)/lib\"" >> .config
+)
+'
+DEF_VARS=
+DEF_INST=
+EOF
+
+    buildin http://download.savannah.nongnu.org/releases/tinycc/tcc-0.9.25.tar.bz2
+    cat >>$target.in << EOF
+DEF_VARS=
+DEF_HOST="\$DEF_HOST --cross-prefix=arm-linux- --cpu=armv4l --with-libgcc"
+DEF_INST=
+EOF
+
+    buildin http://doolittle.icarus.com/ntpclient/ntpclient_2010_365.tar.gz
+    cat >>$target.in << EOF
+target=ntpclient-2010
+DEF_USR='
+echo ntpclient -h time.asia.apple.com -s
+'
+DEF_VARS=
+DEF_HOST=
+DEF_INST="CC=\$CC"
+EOF
+
+    buildin http://ncu.dl.sourceforge.net/project/wput/wput/0.6.2/wput-0.6.2.tar.gz
+    buildin http://fukuchi.org/works/qrencode/qrencode-3.1.1.tar.gz
+    buildin http://squirrel.googlecode.com/files/squirrel_3_0_stable.tar.gz
+    cat >>$target.in << EOF
+target=SQUIRREL3
+DEF_INST=
+EOF
+    buildin http://ymorin.is-a-geek.org/download/crosstool-ng/crosstool-ng-1.10.0.tar.bz2
+    buildin http://bzip.org/1.0.6/bzip2-1.0.6.tar.gz
+    cat >>$target.in << EOF
+DEF_INST="PREFIX=/usr/system CC=arm-linux-gcc -f Makefile-libbz2_so"
+EOF
+
+    buildin http://libav.org/releases/libav-0.6.2.tar.bz2
+    cat >>$target.in << EOF
+DEF_VARS=
+DEF_HOST='--prefix=$PREFIX          \\
+	--disable-static                \\
+	--enable-shared                 \\
+	--disable-stripping             \\
+	--enable-gpl                    \\
+	--enable-cross-compile          \\
+	--cc=arm-linux-gcc              \\
+	--arch=arm                      \\
+	--target-os=linux               \\
+	--enable-armv5te                \\
+	--enable-armvfp                 \\
+	--enable-asm                    \\
+	--disable-bzlib                 \\
+	--disable-zlib                  \\
+	--disable-ffmpeg                \\
+	--disable-ffplay                \\
+	--disable-ffprobe               \\
+	--disable-ffserver              \\
+	--disable-avdevice              \\
+	--enable-avcodec                \\
+	--enable-avformat               \\
+	--enable-postproc               \\
+	--enable-swscale                \\
+	--disable-avfilter              \\
+	--disable-pthreads              \\
+	--disable-w32threads            \\
+	--disable-x11grab               \\
+	--disable-network               \\
+	--disable-mpegaudio-hp          \\
+	--disable-gray                  \\
+	--disable-swscale-alpha         \\
+	--disable-fastdiv               \\
+	--disable-small                 \\
+	--disable-runtime-cpudetect     \\
+	--disable-hardcoded-tables      \\
+	--disable-memalign-hack         \\
+	--disable-debug                 \\
+	--disable-everything            \\
+	--enable-decoder=wmav1          \\
+	--enable-decoder=wmav2          \\
+'
+EOF
+
+    uri=git://svr-mermaid/git/mirror/mplayer.git
+    #buildin $uri
+    target=`echo $uri|sed 's/\(.*\)\/\(.*\)/\2/'`
+    echo Generating $target.in ...
+    cat > $target.in << EOF
+target=${target/.git/}
+DEF_URI=$uri
+DEF_USR='
+git checkout origin/2.0 -b 2.0
+'
+DEF_HOST='--prefix=$PREFIX              \\
+        --enable-mplayer                \\
+        --disable-largefiles            \\
+        --disable-termcap               \\
+        --disable-termios               \\
+        --disable-iconv                 \\
+        --disable-langinfo              \\
+        --disable-lirc                  \\
+        --disable-lircc                 \\
+        --disable-joystick              \\
+        --disable-apple-remote          \\
+        --disable-apple-ir              \\
+        --disable-vm                    \\
+        --disable-xf86keysym            \\
+        --disable-radio                 \\
+        --disable-radio-capture         \\
+        --disable-radio-v4l2            \\
+        --disable-radio-bsdbt848        \\
+        --disable-tv                    \\
+        --disable-tv-v4l1               \\
+        --disable-tv-v4l2               \\
+        --disable-tv-bsdbt848           \\
+        --disable-pvr                   \\
+        --disable-rtc                   \\
+        --disable-networking            \\
+        --disable-winsock2_h            \\
+        --disable-smb                   \\
+        --disable-live                  \\
+        --disable-nemesi                \\
+        --disable-vcd                   \\
+        --disable-bluray                \\
+        --disable-dvdnav                \\
+        --disable-dvdread               \\
+        --disable-dvdread-internal      \\
+        --disable-libdvdcss-internal    \\
+        --disable-cdparanoia            \\
+        --disable-cddb                  \\
+        --disable-bitmap-font           \\
+        --disable-freetype              \\
+        --disable-fontconfig            \\
+        --disable-unrarexec             \\
+        --disable-menu                  \\
+        --disable-sortsub               \\
+        --disable-fribidi               \\
+        --disable-enca                  \\
+        --disable-macosx-finder         \\
+        --disable-macosx-bundle         \\
+        --disable-inet6                 \\
+        --disable-gethostbyname2        \\
+        --disable-ftp                   \\
+        --disable-vstream               \\
+        --disable-pthreads              \\
+        --disable-w32threads            \\
+        --disable-ass                   \\
+        --disable-rpath                 \\
+                                        \\
+        --disable-gif                   \\
+        --disable-png                   \\
+        --disable-mng                   \\
+        --disable-jpeg                  \\
+        --disable-libcdio               \\
+        --disable-win32dll              \\
+        --disable-qtx                   \\
+        --disable-xanim                 \\
+        --disable-real                  \\
+        --disable-xvid                  \\
+        --disable-libnut                \\
+        --disable-libvorbis             \\
+        --disable-tremor                \\
+        --disable-speex                 \\
+        --disable-theora                \\
+        --disable-faad                  \\
+        --disable-ladspa                \\
+        --disable-libbs2b               \\
+        --disable-libdv                 \\
+        --disable-mpg123                \\
+        --enable-mad                    \\
+        --disable-xmms                  \\
+        --disable-libdca                \\
+        --disable-mp3lib                \\
+        --disable-liba52                \\
+        --disable-musepack              \\
+                                        \\
+        --disable-gl                    \\
+        --disable-matrixview            \\
+        --disable-dga2                  \\
+        --disable-dga1                  \\
+        --disable-vesa                  \\
+        --disable-svga                  \\
+        --disable-sdl                   \\
+        --disable-kva                   \\
+        --disable-aa                    \\
+        --disable-caca                  \\
+        --disable-ggi                   \\
+        --disable-ggiwmh                \\
+        --disable-direct3d              \\
+        --disable-directx               \\
+        --disable-dxr3                  \\
+        --disable-ivtv                  \\
+        --disable-v4l2                  \\
+        --disable-dvb                   \\
+        --disable-mga                   \\
+        --disable-xmga                  \\
+        --disable-xv                    \\
+        --disable-xvmc                  \\
+        --disable-vdpau                 \\
+        --disable-vm                    \\
+        --disable-xinerama              \\
+        --disable-x11                   \\
+        --disable-xshape                \\
+        --disable-xss                   \\
+        --disable-fbdev                 \\
+        --disable-3dfx                  \\
+        --disable-tdfxfb                \\
+        --disable-s3fb                  \\
+        --disable-wii                   \\
+        --disable-directfb              \\
+        --disable-bl                    \\
+        --disable-tdfxvid               \\
+        --disable-xvr100                \\
+        --disable-tga                   \\
+        --disable-pnm                   \\
+        --disable-md5sum                \\
+        --disable-yuv4mpeg              \\
+        --disable-corevideo             \\
+        --disable-quartz                \\
+                                        \\
+        --disable-alsa                  \\
+        --enable-ossaudio               \\
+        --disable-arts                  \\
+        --disable-esd                   \\
+        --disable-pulse                 \\
+        --disable-jack                  \\
+        --disable-openal                \\
+        --disable-nas                   \\
+        --disable-sgiaudio              \\
+        --disable-sunaudio              \\
+        --disable-kai                   \\
+        --disable-dart                  \\
+        --disable-win32waveout          \\
+        --disable-coreaudio             \\
+        --disable-select                \\
+                                        \\
+        --host-cc=gcc --cc=arm-linux-gcc --target=arm-linux --enable-cross-compile \\
+'
+DEF_INST=
+EOF
+        buildin http://downloads.sourceforge.net/project/libvncserver/libvncserver/0.9.8/LibVNCServer-0.9.8.tar.gz
+        cat >>$target.in << EOF
+DEF_HOST="\$DEF_HOST --without-x --without-jpeg --without-gcrypt --without-client-gcrypt"
+EOF
+
+        buildin http://ncu.dl.sourceforge.net/project/tinyproxy/stable/1.6.3/tinyproxy-1.6.3.tar.gz
+        buildin http://builds.nightly.webkit.org/files/trunk/src/WebKit-r82617.tar.bz2
+        buildin http://www.opencv.org.cn/download/OpenCV-2.2.0.tar.bz2
+        buildin http://downloads.sourceforge.net/project/p7zip/p7zip/9.20.1/p7zip_9.20.1_src_all.tar.bz2
+        buildin http://www.garloff.de/kurt/linux/bonnie/bonnie-1.4.tar.gz
+        buildin http://google-coredumper.googlecode.com/files/coredumper-1.2.1.tar.gz
+        buildin ftp://ftp.foolabs.com/pub/xpdf/xpdf-3.02.tar.gz
+        buildin http://downloads.sourceforge.net/project/jamvm/jamvm/JamVM%201.5.4/jamvm-1.5.4.tar.gz
+        #buildin http://www.fbreader.org/fbreader-sources-0.12.10.tgz
+        buildin http://ftp.gnu.org/gnu/gnash/0.8.9/gnash-0.8.9.tar.bz2
+        buildin http://www.antigrain.com/agg-2.5.tar.gz
+        buildin http://prdownloads.sourceforge.net/wxwindows/wxWidgets-2.8.12.tar.bz2
+        buildin http://downloads.sourceforge.net/project/tinyxml/tinyxml/2.6.1/tinyxml_2_6_1.zip
+        buildin ftp://ftp.info-zip.org/pub/infozip/src/unzip60.tar.gz
+        buildin ftp://ftp.info-zip.org/pub/infozip/src/zip30.tar.gz
+        buildin http://downloads.sourceforge.net/djvu/djvulibre-3.5.24.tar.gz
+        buildin http://downloads.sourceforge.net/djvu/djview-4.7.tar.gz
+        buildin http://downloads.sourceforge.net/project/ezxml/ezXML/ezXML%200.8.6/ezxml-0.8.6.tar.gz
+        buildin http://cloud.github.com/downloads/xsisqox/Viewnior/viewnior-1.1.tar.gz
+        buildin http://nodejs.org/dist/node-v0.4.8.tar.gz
+        buildin http://ncu.dl.sourceforge.net/project/fuse/fuse-2.X/2.8.5/fuse-2.8.5.tar.gz
+        cat >>$target.in << EOF
+DEF_VARS='$DEF_VARS \\
+MOUNT_FUSE_PATH=\$PREFIX/bin UDEV_RULES_PATH=\$PREFIX/etc/udev/rules.d INIT_D_PATH=\$PREFIX/etc/init.d \\
+'
+EOF
+        buildin http://downloads.sourceforge.net/project/fuse-cache/fuse-cache/0.0.2/cachefs-0.0.2.tar.bz2
+        buildin http://links.twibright.com/download/links-2.3pre2.tar.gz
+        buildin http://www.dillo.org/download/dillo-2.2.tar.bz2
+        buildin http://ftp.easysw.com/pub/fltk/snapshots/fltk-2.0.x-alpha-r8744.tar.bz2
+        buildin ftp://microwindows.censoft.com/pub/microwindows/microwindows-full-0.92.tar.gz
+        buildin http://ftp.twaren.net/Unix/GNU/gnu/libmicrohttpd/libmicrohttpd-0.9.11.tar.gz
+        buildin http://www.tcpdump.org/release/tcpdump-4.0.0.tar.gz
+        buildin http://www.tcpdump.org/release/libpcap-1.0.0.tar.gz
+        buildin http://fuse-zip.googlecode.com/files/fuse-zip-0.2.13.tar.gz
+        cat >>$target.in << EOF
+DEF_USR='
+export PATH=$PREFIX/bin:\$PATH
+[ -f \$target.patch ] || {
+    xxd -ps -r << PATCH_EOF |gunzip |patch -p1 && touch \$target.patch
+1f8b08001fb6024e0003b5955d4fdb301486af975f712e26d136759a0f565850a5d2aa2026a0a8191ada4de538c78dd59054b1038369ff7d4ed3b06c652afbc05212c5e7f57bec739eb491e01c485e5c022f249247b122b6e55a8e6765b958f41211f642b118159c636eb1d5ea57d9b6c22084bcd0ec8d6b3b36715c621f80edf8debeefb9965d0f30ed43db364cd3dc9db4747288dd27ae078ee33b87befb7ecb6938041def770fc0ac1ec3a101e548308501649c4b5447067c33c020528a479c2b18d5697c5f6fe05a627e52a44c892c1dd32409295bb6ee321141472aaab00bd54b4415edc2c642db7701d3e216b4c35c6645ce70ce6e23d0571bbe1a66392d52d5dfffc77ca54f511bedcaba3e79e939d29e81ca0ba6a013ea3ab47e9eecb4d7998eaa05f25e281643ab69520e4625c2e7b3ab7930bd9e8d27f3e9d5e4d2d782e84ff88a77343a7e295bf17f222b7e862be759aedeb92556eb7b4d157420c53bcc756d9204230891519d0d72a451ab0d34b9a70f1264c1184ac98b24b19ed60588cdaef10d012daf0d3ccb21424545229ff43d83ac7ba3fb2418d4e4be0aae4786d948d504f71569d5ec5547ed753a4f359aa12af214f49250d738e3c0e2225d4a5d738c74b555064bc415ec559ff51e840f0a75c97600794197c845825b60d481df23582bfe9abda64103ba7dc7b7fbcf42e795cc791be4cecf4683925e7d95c6dad7a2068c6f6e4ece8f4f8301590099ba403ee9bee83b7e51b90ecf26e793e36032ff21dbd29093eb605205dfb6648c3ab45a2e08cb522e16eb3300218c277421db86b95bacf7a7f7d65803d54f4630b8a5225dff83c074f46132fe587a6c627e393fb032adbe38be0c66e3415d3ccb31be036573a7efc4060000
+PATCH_EOF
+}
+'
+
+DEF_VARS="\$DEF_VARS CXX=\$ARCH-g++ "
+DEF_INST="\$DEF_INST INSTALLPREFIX=\\\$PREFIX"
+EOF
+        buildin http://www.nih.at/libzip/libzip-0.10.tar.gz
+        buildin http://rsync.samba.org/ftp/rsync/src/rsync-3.0.8.tar.gz
+        buildin http://zsync.moria.org.uk/download/zsync-0.6.2.tar.bz2
+        buildin http://ncu.dl.sourceforge.net/project/upnp/libupnp/1.3.1/libupnp-1.3.1.tar.gz
+        buildin http://downloads.xiph.org/releases/icecast/icecast-2.3.2.tar.gz
+        buildin http://downloads.xiph.org/releases/ogg/libogg-1.3.0.tar.gz
+        buildin http://downloads.xiph.org/releases/vorbis/libvorbis-1.3.2.tar.gz
+#------------------------------------------------------------
+
+    return
+}
+
+buildall()
+{
+    [ -z $1 ] && {
+        repo=`cat $BUILD/.dirs`
+    } || {
+        repo="$@"
+    }
+
+    echo $repo
+    for IN in $repo
+    do
+        $0 $IN
+    done
+}
+
+buildclobber()
+{
+    for dir in `cat $BUILD/.dirs 2>/dev/null`
+    do
+        dir=`echo $dir|sed -e "s/\(.*\).in/\1/"`
+        echo unlink $dir
+        echo rm -rf $dir
+    done
+    echo rm -rf $BUILD
+    return
+}
+
+buildone()
+{
+    IN=$1 && shift
+
+    [ -d $IN ] && IN=`basename $IN`
+
+    [ -f $IN ] || {
+        #echo Warning: Not Found $IN
+        [ -f $BUILD/$IN ] && IN=$BUILD/$IN || {
+            #echo Warning: Not Found $BUILD/$IN
+            IN=`find $BUILD/*.in |grep -m1 -e "$IN.*.in$"`
+        }
+    }
+
+    [ -z $IN ] && return
+
+    echo Building $IN ...
+    target=`basename $IN|sed -e "s/\(.*\)\.in/\1/"`
+    echo $target
+
+    [ -f $IN ] && . $IN
+
+    [ -d $target ] || {
+        cd $BUILD/opensource && {
+            urn=`echo $DEF_URI|sed -e "s/\(.*\)\/\(.*\)/\2/"`
+            echo $urn
+            [ -f $urn ] || {
+                ALT_URI="http://192.168.3.21/share/opensource/$urn"
+                wget $ALT_URI || wget $DEF_URI
+            }
+            cd - 1>/dev/null
+        }
+        tar -xvf $BUILD/opensource/$urn
+    }
+
+    cd $target || return && {
+        cur=`pwd` ; echo "Enter $cur"
+        [ -z $1 ] || { echo "Running {$*} ..."; $* || echo FAILED in $cur; return; }
+    }
+
+    #[ ! -f ./configure -a ! -f ./Makefile ] && { echo Nothing to be done; return; }
+
+    build=`basename $BUILD|tr -d .`.sh
+
+    echo "Generating $cur/$build ..."
+    ############################################################
+    echo "#!/bin/sh" > $build
+    echo >>$build
+    echo "cd \`dirname \$0\` && echo Building \`pwd\`" >>$build
+    echo >>$build
+    [ -z "$DEF_USR" ] || echo "$DEF_USR">>$build
+    echo "PREFIX=$PREFIX && \\">>$build
+    echo "$DEF_VARS \\">>$build
+    [ -f ./configure ] && echo "./configure $DEF_HOST && \\">>$build
+    echo "make $DEF_INST \$@" >>$build
+    ############################################################
+    cat ./$build && \
+    chmod a+x ./$build && [ ! -f $BUILD/.disable ] && { ./$build || echo FAILED in $cur; }
+    cd - 1>/dev/null
+
+    return
+}
+
+buildinit()
+{
+    echo Building $BUILD ...
+    mkdir -p $BUILD/opensource $BUILD/install
+    echo -n > $BUILD/.dirs
+    cd $BUILD && { gen_build_in; cd - 1>/dev/null; }
+}
+
+main()
+{
+    [ -f $BUILD/build.in ] && . $BUILD/build.in
+
+    [ ! -d $BUILD -o -f $BUILD/.debug ] && (
+        buildinit
+    )
+
+    [ -h $PREFIX ] || {
+        echo PREFIX=$PREFIX, directory is not exist
+        sudo ln -vs $BUILD/install $PREFIX;
+    }
+
+    #find /usr/share/toolchain/arm-2010q1/bin/ -name '*-linux-*' -print -exec ln -sf {} \; ; rename -f 's/none-//;s/gnueabi-//' *-linux-*
+    $ARCH-gcc --version 2>&1|grep "gcc" || { echo $ARCH-gcc: not found; return; }
+
+    [ -z $1 ] && {
+        build=`basename $BUILD|tr -d .`.sh
+        [ ! -f $BUILD/.disable -a -f ./$build ] && { ./$build || echo $build FAILED; return; }
+
+        [ -f ./configure -o -f ./Makefile ] && {
+            cur="`pwd`"; cd .. && buildone $cur
+        } || {
+            echo "Usage: $0 module ..."
+        }
+        return
+    }
+
+    case $1 in
+        all) shift
+        buildall "$@" 2>&1|tee $BUILD/build-`date +%Y%m%d%H%M`.log
+        ;;
+
+        clobber) shift
+        buildclobber "$@"
+        ;;
+
+        renew) shift
+        buildinit "$@"
+        cur=`pwd`; cd .. && buildone $cur
+        ;;
+
+        *)
+        buildone "$@"
+        ;;
+
+    esac
+    return
+}
+
+main "$@"
